@@ -1,3 +1,4 @@
+yaml
 name: Build APK
 on:
   push:
@@ -8,19 +9,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unzip project
-        run: unzip -q sachin-apk-project.zip -d project
+
+      - name: Find project
+        run: |
+          set -e
+          echo "--- repo files ---"
+          ls -la
+          Z=$(find . -maxdepth 2 -iname '*.zip' -not -path './.git/*' -print -quit)
+          mkdir -p /tmp/proj
+          if [ -n "$Z" ]; then
+            echo "Found zip: $Z"
+            unzip -q "$Z" -d /tmp/proj
+          else
+            S=$(find . -name settings.gradle -not -path './.git/*' -print -quit)
+            if [ -z "$S" ]; then echo "ERROR: zip kinva project files sapadle nahit"; exit 1; fi
+            cp -r "$(dirname "$S")"/. /tmp/proj/
+          fi
+          S=$(find /tmp/proj -name settings.gradle -print -quit)
+          if [ -z "$S" ]; then echo "ERROR: settings.gradle sapadle nahi"; exit 1; fi
+          echo "PROJECT_DIR=$(dirname "$S")" >> "$GITHUB_ENV"
+          echo "Project dir: $(dirname "$S")"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+
       - name: Build debug APK
-        working-directory: project
+        working-directory: ${{ env.PROJECT_DIR }}
         run: gradle assembleDebug --no-daemon --stacktrace
+
       - uses: actions/upload-artifact@v4
         with:
           name: Sachin-APK
-          path: project/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
